@@ -1,0 +1,4 @@
+testbin.bin
+*.out
+*.o
+*.exe

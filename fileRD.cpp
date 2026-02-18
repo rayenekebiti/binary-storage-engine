@@ -285,31 +285,6 @@ public:
         reset_records.close();
     }
 };
-/*class user_input{
-binary_file* binary;
-void welcome_menu(){
- std::string user_input;
- std::cout<<">>";
- std::getline(std::cin,user_input);
- enum class user_input{
-   show,
-   add,
-   numbers,
-   memory,
-   help=6
- };
- switch (user_input)
- {
- case 1:
-
-   break;
-
- default:
-   break;
- }
-}
-};
-*/
 int main()
 {
     binary_file bin;

@@ -281,11 +281,3 @@ public:
         }
     }
 };
-
-int main()
-{
-    binary_file bin;
-    //bin.binary_read();
-    //bin.add_records();
-    //bin.binary_read();
-}

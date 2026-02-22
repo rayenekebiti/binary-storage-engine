@@ -1,25 +1,50 @@
-## Overview
+# Minimal Binary Storage Engine (C++)
 
-* A low-level binary storage engine implementing:
+This project is a learning-focused implementation of a minimal binary
+storage engine written in C++.
+updates of this project to make it much useful are soon coming.
 
-* Fixed-size record layout
+It uses a fixed-size record layout stored directly on disk, with:
+- a persistent file header
+- append-only record insertion
+- update-in-place modification
+- logical deletion via flags
+- compaction to remove inactive records
+- an in-memory index rebuilt on startup
 
-* Persistent file header (magic, version, next_id)
+## File Format
 
-* Monotonic ID allocation
+[ header ][ record ][ record ][ record ] ...
 
-* Logical deletion (tombstones)
+- header: magic, version, next_id
+- record: { id, fixed-size payload, flags }
 
-* File compaction
+## Supported Operations
 
-* In-memory hash index (id → offset)
+- add_records(name)
+- modify_records(id, new_name)
+- set_inactive(id)
+- clear_inactive_records()
 
-## Design Goals
+## Design Constraints
 
-* Understand file I/O at byte level
+- single-threaded
+- fixed-size records
+- no WAL / crash recovery
+- no concurrency
+- educational scope
 
-* Separate metadata from data
+## Motivation
 
-* Maintain persistence invariants
+This project was built to understand:
+- binary file layouts
+- offset-based indexing
+- invariants in storage systems
+- safe use of memcpy / fixed buffers
 
-* Implement restart-safe identity allocation
+## Limitations / Next Steps
+
+- crash consistency
+- write-ahead logging
+- persistent index
+- variable-length records

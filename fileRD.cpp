@@ -72,12 +72,12 @@ public:
             std::cerr << "error, wrong file read, error:111,3" << std::endl;
             std::ofstream rewrite_file("testbin.bin", std::ios::trunc);
             rewrite_file.write(reinterpret_cast<char *>(&temp), sizeof(temp));
-            rewrite_file.close();
             if (!rewrite_file)
             {
                 std::cerr << "fatal error, can't rewrite in the file, error:111,4";
                 std::terminate();
             }
+            rewrite_file.close();
         }
         for (uint16_t i{}; i < file_records(); i++)
         {
@@ -148,11 +148,11 @@ public:
         {
          throw std::out_of_range("payload is out of range,error:555,2");
         }
-        std::memcpy(newinf.payload.data(),newname.data(),newname.size());
+        std::memcpy(newinf.payload.data(),newname.c_str(),newname.size());
         newinf.payload[newname.size()]='\0';
-
         newinf.id = allocate_id();
         newinf.flags = 1;
+        user_add.seekp(0,std::ios::end);
         user_add.write(reinterpret_cast<char *>(&newinf), sizeof(newinf));
         if(!user_add)
         {
@@ -164,20 +164,22 @@ public:
 
     // void binary_read() // 666
     //{
-    //
+    //     
     //     std::fstream binreader("testbin.bin", std::ios::in | std::ios::binary);
     //     if (!binreader)
     //     {
     //         std::cerr << "unable to open file to read, error:666,1" << std::endl;
     //         return;
     //     }
+    //
     //     for (uint16_t i{}; i < file_records(); i++)
     //     {
     //         record temp_read{};
     //         binreader.seekg(i * sizeof(record) + sizeof(file_header), std::ios::beg);
     //         binreader.read(reinterpret_cast<char *>(&temp_read), sizeof(temp_read));
-    //         std::cout << "user is active: [" << static_cast<int>(temp_read.flags) << "], id: " << temp_read.id << ", name: " << temp_read.name<< "\n"
-    //                   << std::endl;
+    //         std::string temp_payload(temp_read.payload.data());
+    //         std::cout << "user is active: [" << static_cast<int>(temp_read.flags) << "], id: " << temp_read.id << ", name: "
+    //          <<temp_payload<< "\n"<< std::endl;
     //     }
     //     binreader.close();
     // }
@@ -281,3 +283,11 @@ public:
         }
     }
 };
+
+int main()
+{
+    binary_file bin;
+    bin.binary_read();
+    bin.add_records("bonbon");
+    bin.binary_read();
+}

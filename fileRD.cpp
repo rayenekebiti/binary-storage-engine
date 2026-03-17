@@ -6,7 +6,10 @@
 #include <vector>
 #include <unordered_map>
 #include <array>
+<<<<<<< HEAD
 #include <expected>
+=======
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
 
 /*
 struct size: 5 bytes
@@ -23,7 +26,10 @@ struct file_header
     uint16_t header;
     uint8_t version;
     uint16_t next_id;
+<<<<<<< HEAD
     std::string file_name;
+=======
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
 };
 #pragma pack(pop)
 
@@ -47,13 +53,17 @@ struct record
 class binary_file
 {
 public:
+<<<<<<< HEAD
     file_header filename;
     std::fstream allocator;
+=======
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
     std::unordered_map<uint16_t, std::streampos> id_map;
     binary_file() // 111
     {
         file_header head_check;
         file_header temp{0xa055, 3, 999};
+<<<<<<< HEAD
         allocator.open(filename.file_name, std::ios::binary | std::ios::in | std::ios::out);
         
         if (!allocator.is_open())
@@ -78,30 +88,72 @@ public:
                 throw std::runtime_error("fatal error, can't rewrite in the file, error:111,4");
             }
             allocator.open(filename.file_name, std::ios::binary | std::ios::in | std::ios::out);
+=======
+        std::fstream check_file("testbin.bin", std::ios::in | std::ios::out | std::ios::binary);
+        if (!check_file.is_open())
+        {
+            std::cerr << "failed to open fail to check user, error:111,1" << std::endl;
+            std::ofstream creatfile("testbin.bin", std::ios::out | std::ios::binary);
+            creatfile.write(reinterpret_cast<char *>(&temp), sizeof(temp));
+            if (!creatfile)
+            {
+                std::cerr << "fatal error:cannot create files, error:111,2";
+                std::terminate();
+            }
+            std::cout << "file recreated succesfully" << std::endl;
+            return;
+        }
+
+        check_file.read(reinterpret_cast<char *>(&head_check), sizeof(head_check));
+        if (temp.header != head_check.header || temp.version != head_check.version)
+        {
+            check_file.close();
+            std::cerr << "error, wrong file read, error:111,3" << std::endl;
+            std::ofstream rewrite_file("testbin.bin", std::ios::trunc);
+            rewrite_file.write(reinterpret_cast<char *>(&temp), sizeof(temp));
+            if (!rewrite_file)
+            {
+                std::cerr << "fatal error, can't rewrite in the file, error:111,4";
+                std::terminate();
+            }
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
             rewrite_file.close();
         }
         for (uint16_t i{}; i < file_records(); i++)
         {
             record temp{};
             std::streampos offset = i * sizeof(record) + sizeof(file_header);
+<<<<<<< HEAD
             allocator.seekg(offset, std::ios::beg);
             allocator.read(reinterpret_cast<char *>(&temp), sizeof(temp));
+=======
+            check_file.seekg(offset, std::ios::beg);
+            check_file.read(reinterpret_cast<char *>(&temp), sizeof(temp));
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
             if (temp.flags == 1)
             {
                 id_map[temp.id] = offset;
             }
         }
+<<<<<<< HEAD
     }
     ~binary_file()
     {
      if(allocator.is_open())
      allocator.close();
+=======
+        check_file.close();
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
     }
     uint16_t allocate_id() // 13
     {
         uint16_t id;
         file_header head;
+<<<<<<< HEAD
         
+=======
+        std::fstream allocator("testbin.bin", std::ios::binary | std::ios::in | std::ios::out);
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
         if (!allocator)
         {
             throw std::runtime_error("can't open file, error:13,1");
@@ -112,6 +164,10 @@ public:
         head.next_id++;
         allocator.seekp(0, std::ios::beg);
         allocator.write(reinterpret_cast<char *>(&head), sizeof(head));
+<<<<<<< HEAD
+=======
+        allocator.close();
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
         return id;
     }
     std::streampos find_pos(uint16_t temp_id) // 888
@@ -124,10 +180,18 @@ public:
         std::streampos offset = get_pos->second;
         return offset;
     }
+<<<<<<< HEAD
     uint16_t file_records() // 333
     {
         uint16_t file_records;
         std::fstream binreader(filename.file_name, std::ios::in | std::ios::binary);
+=======
+
+    uint16_t file_records() // 333
+    {
+        uint16_t file_records;
+        std::fstream binreader("testbin.bin", std::ios::in | std::ios::binary);
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
         if (!binreader)
         {
             throw std::runtime_error("unable to open file to read and get file size, please try again later, error:333,1");
@@ -142,7 +206,11 @@ public:
     void add_records(const std::string& newname) // 555
     {
         record newinf{};
+<<<<<<< HEAD
         std::fstream user_add(filename.file_name, std::ios::out | std::ios::binary | std::ios::in |std::ios::app);
+=======
+        std::fstream user_add("testbin.bin", std::ios::out | std::ios::binary | std::ios::app);
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
         if (!user_add.is_open())
         {
             throw std::runtime_error("unable to open file to add the user, please try again, error:555,1");
@@ -161,17 +229,25 @@ public:
         {
             throw std::runtime_error("unable to write to the file, error:555,3");
         }
+<<<<<<< HEAD
         user_add.seekg(0, std::ios::end);
         std::streampos size_of_file = user_add.tellg();
         uint16_t new_record = (size_of_file - sizeof(file_header)) / sizeof(record);
         std::streampos new_offset=(new_record-1)*sizeof(record)+sizeof(file_header);
+=======
+        std::streampos new_offset=(file_records()-1)*sizeof(record)+sizeof(file_header);
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
         id_map[newinf.id]=new_offset;
     }
 
     // void binary_read() // 666
     //{
     //     
+<<<<<<< HEAD
     //     std::fstream binreader(filename.file_name, std::ios::in | std::ios::binary);
+=======
+    //     std::fstream binreader("testbin.bin", std::ios::in | std::ios::binary);
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
     //     if (!binreader)
     //     {
     //         std::cerr << "unable to open file to read, error:666,1" << std::endl;
@@ -197,7 +273,11 @@ public:
         {
             throw std::out_of_range("payload is out of range, error::777,0");
         }
+<<<<<<< HEAD
         std::fstream modify(filename.file_name, std::ios::in | std::ios::out | std::ios::binary);
+=======
+        std::fstream modify("testbin.bin", std::ios::in | std::ios::out | std::ios::binary);
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
         if (!modify)
         {
             throw std::runtime_error("unable to open file, error:777,1");
@@ -222,7 +302,11 @@ public:
     void set_inactive(uint16_t temp_id) // 999
     {
         record temp{};
+<<<<<<< HEAD
         std::fstream inactive_user(filename.file_name, std::ios::binary | std::ios::in | std::ios::out);
+=======
+        std::fstream inactive_user("testbin.bin", std::ios::binary | std::ios::in | std::ios::out);
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
         if (!inactive_user)
         {
             throw std::runtime_error("fatal error:file is corrupted or don't exist, error:999,1");
@@ -241,7 +325,11 @@ public:
         uint16_t records = file_records();
         file_header temp{};
 
+<<<<<<< HEAD
         std::fstream clear_inactive(filename.file_name, std::ios::binary | std::ios::in);
+=======
+        std::fstream clear_inactive("testbin.bin", std::ios::binary | std::ios::in);
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
         if (!clear_inactive)
         {
             throw std::runtime_error("unable to open file,error: 12,0");
@@ -269,9 +357,15 @@ public:
                 write_index++;
             }
         }
+<<<<<<< HEAD
         std::remove(filename.file_name.c_str());
         rename("temp.bin", filename.file_name.c_str());
         std::fstream reset_records(filename.file_name, std::ios::binary | std::ios::in);
+=======
+        std::remove("testbin.bin");
+        rename("temp.bin", "testbin.bin");
+        std::fstream reset_records("testbin.bin", std::ios::binary | std::ios::in);
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af
         reset_records.seekg(0, std::ios::end);
         std::streampos size_of_file = reset_records.tellg();
         uint16_t new_record_size = (size_of_file - sizeof(file_header)) / sizeof(record);
@@ -289,3 +383,14 @@ public:
         }
     }
 };
+<<<<<<< HEAD
+=======
+
+int main()
+{
+    binary_file bin;
+    bin.binary_read();
+    bin.add_records("bonbon");
+    bin.binary_read();
+}
+>>>>>>> 37aa876a2e40463a399038a52892b617b27540af

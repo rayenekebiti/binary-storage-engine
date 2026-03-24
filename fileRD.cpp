@@ -46,19 +46,19 @@ struct record
 class binary_file
 {
 public:
-    std::string file_name="bombo.bin";
+    std::string file_name;
     std::fstream allocator;
     std::unordered_map<uint16_t, std::streampos> id_map;
-    binary_file() // 111
+    binary_file(const std::string& file_namer, const file_header &header_cord) // 111
     {
+        file_name=file_namer;
         file_header head_check;
-        file_header temp{0xa055, 3, 999};
         allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
         
         if (!allocator.is_open())
         {
             std::ofstream creatfile(file_name, std::ios::out | std::ios::binary);
-            creatfile.write(reinterpret_cast<char *>(&temp), sizeof(temp));
+            creatfile.write(reinterpret_cast<const char *>(&header_cord), sizeof(header_cord));
             if (!creatfile)
             {
                 throw std::runtime_error("FATAL ERROR: unable to create the file");
@@ -67,11 +67,11 @@ public:
             allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
         }
         allocator.read(reinterpret_cast<char *>(&head_check), sizeof(head_check));
-        if (temp.header != head_check.header || temp.version != head_check.version)
+        if (header_cord.header != head_check.header || header_cord.version != head_check.version)
         {
             allocator.close();
             std::ofstream rewrite_file(file_name, std::ios::trunc);
-            rewrite_file.write(reinterpret_cast<char *>(&temp), sizeof(temp));
+            rewrite_file.write(reinterpret_cast<const char *>(&header_cord), sizeof(header_cord));
             if (!rewrite_file)
             {
                 throw std::runtime_error("fatal error, can't rewrite in the file, error:111,4");
@@ -164,8 +164,8 @@ public:
         }
         user_add.seekg(0, std::ios::end);
         std::streampos size_of_file = user_add.tellg();
-        uint16_t new_record = (size_of_file - sizeof(file_header)) / sizeof(record);
-        std::streampos new_offset=(new_record-1)*sizeof(record)+sizeof(file_header);
+        uint16_t number_of_records = (size_of_file - sizeof(file_header)) / sizeof(record);
+        std::streampos new_offset=(number_of_records-1)*sizeof(record)+sizeof(file_header);
         id_map[newinf.id]=new_offset;
         user_add.close();
     }
@@ -190,7 +190,7 @@ public:
         }
         binreader.close();
     }
-    std::vector<record> binary_read(std::vector<record> &load_records_in_memory) // 666
+    void binary_read(std::vector<record> &load_records_in_memory) // 666
    {
         std::fstream binreader(file_name, std::ios::in | std::ios::binary);
         if (!binreader)
@@ -206,7 +206,6 @@ public:
             load_records_in_memory.push_back(temp_read);
         }
         binreader.close();
-        return load_records_in_memory;
     }
     
     void modify_records(uint16_t temp_id,const std::string& new_name) // 777
@@ -271,7 +270,7 @@ public:
         allocator.seekg(0, std::ios::beg);
         allocator.read(reinterpret_cast<char *>(&temp), sizeof(temp));
 
-        std::fstream only_active_file("temp.bin", std::ios::binary | std::ios::out);
+        std::fstream only_active_file("temp.bin", std::ios::binary | std::ios::out|std::ios::trunc);
          if (!only_active_file)
         {
             throw std::runtime_error("can't open file, error:12,1");
@@ -287,17 +286,18 @@ public:
             if (temp_read.flags == 1)
             {
                 only_active_file.seekp(write_index * sizeof(record) + sizeof(file_header), std::ios::beg);
-                //debug cout
-                std::cout<<temp_read.id<<std::endl;
                 only_active_file.write(reinterpret_cast<char *>(&temp_read), sizeof(temp_read));
                 write_index++;
             }
         }
-        std::remove(file_name.c_str());
         allocator.close();
         only_active_file.close();
+        std::remove(file_name.c_str());
         rename("temp.bin", file_name.c_str());
         allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
+        if(!allocator){
+            throw std::runtime_error("unable to open the cleared file, error:12,3");
+        }
         allocator.seekg(0, std::ios::end);
         std::streampos size_of_file = allocator.tellg();
         uint16_t new_record_size = (size_of_file - sizeof(file_header)) / sizeof(record);
@@ -317,11 +317,101 @@ public:
     
 };
 int main(){
-    binary_file bin;
-    //bin.add_records("oo");
-    
-    bin.clear_inactive_records();
-    bin.binary_read_console_print();
 
+//binary_file bin("rayene.bin",{0xa055, 3, 999});
+/*
+bin.add_records("rayene");
+std::vector<record> records;
+bin.binary_read(records);
+bool name_correct = std::string(records[0].payload.data()) == "rayene";
+bool flag_correct = records[0].flags == 1;
+bool id_in_map = bin.id_map.count(records[0].id) == 1;
 
+std::cout << "add_records name: " << (name_correct ? "PASS" : "FAIL") << "\n";
+std::cout << "add_records flag: " << (flag_correct ? "PASS" : "FAIL") << "\n";
+std::cout << "add_records id_map: " << (id_in_map ? "PASS" : "FAIL") << "\n";
+output:
+TEST add_records: 2026-03-24 12:31AM
+add_records name: PASS
+add_records flag: PASS
+add_records id_map: PASS
+*/
+/*
+bin.modify_records(999,"omar");
+std::vector<record> modified_record;
+bin.binary_read(modified_record);
+bool name_modified = std::string(modified_record[0].payload.data()) == "omar";
+bool flag_modified = modified_record[0].flags == 1;
+bool id_in_map_modified = bin.id_map.count(modified_record[0].id) == 1;
+
+std::cout << "modify_records name: " << (name_modified ? "PASS" : "FAIL") << "\n";
+std::cout << "modify_records flag: " << (flag_modified ? "PASS" : "FAIL") << "\n";
+std::cout << "modify_records id_map: " << (id_in_map_modified ? "PASS" : "FAIL") << "\n";
+
+TEST mosdify_records: 2026-03-24 12:37AM
+modify_records name: PASS
+modify_records flag: PASS
+modify_records id_map: PASS
+*/
+/*
+bin.set_inactive(999);
+std::vector<record> inactive_records;
+bin.binary_read(inactive_records);
+bool name_inactive = std::string(inactive_records[0].payload.data()) == "omar";
+bool flag_inactive = inactive_records[0].flags == 0;
+bool id_in_map_inactive = bin.id_map.count(inactive_records[0].id) == 0;
+
+std::cout << "inactive_records name: " << (name_inactive ? "PASS" : "FAIL") << "\n";
+std::cout << "inactive_records flag: " << (flag_inactive ? "PASS" : "FAIL") << "\n";
+std::cout << "inactive_records id_map: " << (id_in_map_inactive ? "PASS" : "FAIL") << "\n";
+
+TEST set_inactive: 2026-03-24 12:56AM
+inactive_records name: PASS
+inactive_records flag: PASS
+inactive_records id_map: PASS
+*/
+/*
+bin.clear_inactive_records();
+std::vector<record> cleared_records;
+bin.binary_read(cleared_records);
+std::cout << "binary_read returns records: " << (cleared_records.empty() ? "PASS" : "FAIL") << "\n";
+TEST clear_inactive_records: 2026-03-24 12:56AM
+binary_read returns records: PASS
+*/
+/*
+bin.add_records("Rayene");
+uint16_t first = bin.allocate_id();
+uint16_t second = bin.allocate_id();
+std::cout << "allocate_id increments: " << (second == first + 1 ? "PASS" : "FAIL") << "\n";
+TEST clear_inactive_records: 2026-03-24 1:26AM
+allocate_id increments: PASS
+*/
+/*
+std::cout<<"find_pos results: "<<(bin.find_pos(999)==sizeof(file_header)? "PASS": "FAIL")<<"\n";
+try {
+    bin.find_pos(99999);
+    std::cout << "find_pos invalid id: FAIL\n";
+} catch (std::runtime_error&) {
+    std::cout << "find_pos invalid id: PASS\n";
+}
+
+TEST find_pos:2026-03-24 3:55PM
+find_pos results: PASS
+find_pos invalid id: PASS
+*/
+/*
+uint16_t saved_id;
+{
+binary_file bin("rayene.bin",{0xa055, 3, 999});
+bin.add_records("rayene");
+std::vector<record> records;
+bin.binary_read(records);
+saved_id=records[0].id;
+}
+binary_file bin2("rayene.bin", {0xa055, 3, 999});
+std::cout << "constructor id_map: " << (bin2.id_map.count(saved_id) == 1 ? "PASS" : "FAIL") << "\n";
+
+TEST constructor:2026-03-24 7:20PM
+constructor id_map: PASS
+*/
 }

@@ -45,9 +45,9 @@ struct record
 #pragma pack(pop)
 class binary_file
 {
-public:
     std::string file_name;
     std::fstream allocator;
+public:
     std::unordered_map<uint16_t, std::streampos> id_map;
     binary_file(const std::string& file_namer, const file_header &header_cord) // 111
     {

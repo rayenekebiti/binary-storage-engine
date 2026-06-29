@@ -45,12 +45,13 @@ struct record
 #pragma pack(pop)
 class binary_file
 {
-public:
     std::string file_name;
     std::fstream allocator;
+    uint16_t file_record_buffer;
+public:
     std::unordered_map<uint16_t, std::streampos> id_map;
     binary_file(const std::string& file_namer, const file_header &header_cord) // 111
-    {
+    {        
         file_name=file_namer;
         file_header head_check;
         allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
@@ -79,7 +80,8 @@ public:
             allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
             rewrite_file.close();
         }
-        for (uint16_t i{}; i < file_records(); i++)
+        file_record_buffer=file_records();
+        for (uint16_t i{}; i < file_record_buffer; i++)
         {
             record temp{};
             std::streampos offset = i * sizeof(record) + sizeof(file_header);
@@ -168,6 +170,7 @@ public:
         std::streampos new_offset=(number_of_records-1)*sizeof(record)+sizeof(file_header);
         id_map[newinf.id]=new_offset;
         user_add.close();
+        file_record_buffer+=1;
     }
 
     void binary_read_console_print() // 666
@@ -179,7 +182,7 @@ public:
             throw std::runtime_error("unable to open file, error:666,1");
         }
    
-        for (uint16_t i{}; i < file_records(); i++)
+        for (uint16_t i{}; i < file_record_buffer; i++)
         {
             record temp_read{};
             binreader.seekg(i * sizeof(record) + sizeof(file_header), std::ios::beg);
@@ -198,7 +201,7 @@ public:
             throw std::runtime_error("unable to open file, error:666,1");
         }
    
-        for (uint16_t i{}; i < file_records(); i++)
+        for (uint16_t i{}; i < file_record_buffer; i++)
         {
             record temp_read{};
             binreader.seekg(i * sizeof(record) + sizeof(file_header), std::ios::beg);
@@ -258,7 +261,7 @@ public:
     void clear_inactive_records() // 12
     {
         uint16_t write_index = 0;
-        uint16_t records = file_records();
+        uint16_t records = file_record_buffer;
         file_header temp{};
 
         allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
@@ -313,13 +316,14 @@ public:
                 id_map[temp.id] = offset;
             }
         }
+        file_record_buffer=new_record_size;
     }
     
 };
 int main(){
 
-//binary_file bin("rayene.bin",{0xa055, 3, 999});
-/*
+binary_file bin("rayene.bin",{0xa055, 3, 999});
+
 bin.add_records("rayene");
 std::vector<record> records;
 bin.binary_read(records);
@@ -330,6 +334,7 @@ bool id_in_map = bin.id_map.count(records[0].id) == 1;
 std::cout << "add_records name: " << (name_correct ? "PASS" : "FAIL") << "\n";
 std::cout << "add_records flag: " << (flag_correct ? "PASS" : "FAIL") << "\n";
 std::cout << "add_records id_map: " << (id_in_map ? "PASS" : "FAIL") << "\n";
+/*
 output:
 TEST add_records: 2026-03-24 12:31AM
 add_records name: PASS

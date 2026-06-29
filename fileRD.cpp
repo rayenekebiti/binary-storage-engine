@@ -47,7 +47,10 @@ class binary_file
 {
     std::string file_name;
     std::fstream allocator;
+<<<<<<< HEAD
     uint16_t file_record_buffer;
+=======
+>>>>>>> 9335f1ae34109209e3aa409c234f516783b2119e
 public:
     std::unordered_map<uint16_t, std::streampos> id_map;
     binary_file(const std::string& file_namer, const file_header &header_cord) // 111

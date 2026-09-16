@@ -99,6 +99,10 @@ public:
      if(allocator.is_open())
      allocator.close();
     }
+    /*allocate_id() reads the head of the file
+	extracts the id and increment it by one 
+	overwrites the new id
+	returns the old id */
     uint16_t allocate_id() // 13
     {
         uint16_t id;

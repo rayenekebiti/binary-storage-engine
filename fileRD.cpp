@@ -1,426 +1,299 @@
-#include <iostream>
-#include <stdint.h>
-#include <fstream>
+#include "fileRD.h"
+
+#include <cstdio>
 #include <cstring>
-#include <string>
-#include <vector>
-#include <unordered_map>
-#include <array>
-#include <expected>
+#include <iostream>
+#include <stdexcept>
 
-/*
-struct size: 5 bytes
-offset  size   type       field
-  0      2    uint16_t    header
-  2      1    uint8_t     version
-  3      2    uint16_t    next_id
-  there exists only one header at the beginning of the file
+binary_file::binary_file(const std::string& file_namer, const file_header& header_cord)
+    : file_name(file_namer), file_record_buffer(0)
+{
+    file_header head_check{};
+    allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
 
-*/
-#pragma pack(push, 1)
-struct file_header
-{
-    uint16_t header;
-    uint8_t version;
-    uint16_t next_id;
-};
-#pragma pack(pop)
-
-/*
-File format: Bin
-struct size: 35 bytes
-offset  size   type      field
-5        2     uint16_t   id
-7        32    char[32]   name(null-terminate if shorter than 32)
-39       1     uint8_t    flags(1 for true|0 for false)
-each user start at 35*i bytes
-*/
-#pragma pack(push, 1)
-struct record
-{
-    uint16_t id;
-    std::array<char, 32> payload;
-    uint8_t flags;
-};
-#pragma pack(pop)
-class binary_file
-{
-    std::string file_name;
-    std::fstream allocator;
-    uint16_t file_record_buffer;
-public:
-    std::unordered_map<uint16_t, std::streampos> id_map;
-    binary_file(const std::string& file_namer, const file_header &header_cord) // 111
-    {        
-        file_name=file_namer;
-        file_header head_check;
+    if (!allocator.is_open())
+    {
+        std::ofstream create_file(file_name, std::ios::out | std::ios::binary);
+        create_file.write(reinterpret_cast<const char*>(&header_cord), sizeof(header_cord));
+        if (!create_file)
+        {
+            throw std::runtime_error("FATAL ERROR: unable to create the file");
+        }
+        create_file.close();
         allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
-        
-        if (!allocator.is_open())
-        {
-            std::ofstream creatfile(file_name, std::ios::out | std::ios::binary);
-            creatfile.write(reinterpret_cast<const char *>(&header_cord), sizeof(header_cord));
-            if (!creatfile)
-            {
-                throw std::runtime_error("FATAL ERROR: unable to create the file");
-            }
-            creatfile.close(); 
-            allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
-        }
-        allocator.read(reinterpret_cast<char *>(&head_check), sizeof(head_check));
-        if (header_cord.header != head_check.header || header_cord.version != head_check.version)
-        {
-            allocator.close();
-            std::ofstream rewrite_file(file_name, std::ios::trunc);
-            rewrite_file.write(reinterpret_cast<const char *>(&header_cord), sizeof(header_cord));
-            if (!rewrite_file)
-            {
-                throw std::runtime_error("fatal error, can't rewrite in the file, error:111,4");
-            }
-            allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
-            rewrite_file.close();
-        }
-        file_record_buffer=file_records();
-        for (uint16_t i{}; i < file_record_buffer; i++)
-        {
-            record temp{};
-            std::streampos offset = i * sizeof(record) + sizeof(file_header);
-            allocator.seekg(offset, std::ios::beg);
-            allocator.read(reinterpret_cast<char *>(&temp), sizeof(temp));
-            if (temp.flags == 1)
-            {
-                id_map[temp.id] = offset;
-            }
-        }
+    }
+
+    allocator.read(reinterpret_cast<char*>(&head_check), sizeof(head_check));
+    if (header_cord.header != head_check.header || header_cord.version != head_check.version)
+    {
         allocator.close();
-    }
-    ~binary_file()
-    {
-     if(allocator.is_open())
-     allocator.close();
-    }
-    /*allocate_id() reads the head of the file
-	extracts the id and increment it by one 
-	overwrites the new id
-	returns the old id */
-    uint16_t allocate_id() // 13
-    {
-        uint16_t id;
-        file_header head;
+        std::ofstream rewrite_file(file_name, std::ios::binary | std::ios::trunc);
+        rewrite_file.write(reinterpret_cast<const char*>(&header_cord), sizeof(header_cord));
+        if (!rewrite_file)
+        {
+            throw std::runtime_error("fatal error, can't rewrite in the file, error:111,4");
+        }
+        rewrite_file.close();
         allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
-        if (!allocator)
-        {
-            throw std::runtime_error("can't open file, error:13,1");
-        }
-        allocator.seekg(0, std::ios::beg);
-        allocator.read(reinterpret_cast<char *>(&head), sizeof(head));
-        id = head.next_id;
-        head.next_id++;
-        allocator.seekp(0, std::ios::beg);
-        allocator.write(reinterpret_cast<char *>(&head), sizeof(head));
-        allocator.close();
-        return id;
-    }
-    std::streampos find_pos(uint16_t temp_id) // 888
-    {
-        auto get_pos = id_map.find(temp_id);
-        if (get_pos == id_map.end())
-        {
-            throw std::runtime_error("invalid input, error:888");
-        };
-        std::streampos offset = get_pos->second;
-        return offset;
-    }
-    uint16_t file_records() // 333
-    {
-        uint16_t file_records;
-        std::fstream binreader(file_name, std::ios::in | std::ios::binary);
-        if (!binreader)
-        {
-            throw std::runtime_error("unable to open file to read and get file size, please try again later, error:333,1");
-        }
-        binreader.seekg(0, std::ios::end);
-        std::streampos size_of_file = binreader.tellg();
-        file_records = (size_of_file - sizeof(file_header)) / sizeof(record);
-        binreader.close();
-        return file_records;
     }
 
-    void add_records(const std::string& newname) // 555
-    {
-        record newinf{};
-        std::fstream user_add(file_name, std::ios::out | std::ios::binary | std::ios::in |std::ios::app);
-        if (!user_add.is_open())
-        {
-            throw std::runtime_error("unable to open file to add the user, please try again, error:555,1");
-        }
-        if(newname.size()>newinf.payload.size()-1||newname.empty())
-        {
-         throw std::out_of_range("payload is out of range,error:555,2");
-        }
-        std::memcpy(newinf.payload.data(),newname.c_str(),newname.size());
-        newinf.payload[newname.size()]='\0';
-        newinf.id = allocate_id();
-        newinf.flags = 1;
-        user_add.seekp(0,std::ios::end);
-        user_add.write(reinterpret_cast<char *>(&newinf), sizeof(newinf));
-        if(!user_add)
-        {
-            throw std::runtime_error("unable to write to the file, error:555,3");
-        }
-        user_add.seekg(0, std::ios::end);
-        std::streampos size_of_file = user_add.tellg();
-        uint16_t number_of_records = (size_of_file - sizeof(file_header)) / sizeof(record);
-        std::streampos new_offset=(number_of_records-1)*sizeof(record)+sizeof(file_header);
-        id_map[newinf.id]=new_offset;
-        user_add.close();
-        file_record_buffer+=1;
-    }
-
-    void binary_read_console_print() // 666
-   {
-        
-        std::fstream binreader(file_name, std::ios::in | std::ios::binary);
-        if (!binreader)
-        {
-            throw std::runtime_error("unable to open file, error:666,1");
-        }
-   
-        for (uint16_t i{}; i < file_record_buffer; i++)
-        {
-            record temp_read{};
-            binreader.seekg(i * sizeof(record) + sizeof(file_header), std::ios::beg);
-            binreader.read(reinterpret_cast<char *>(&temp_read), sizeof(temp_read));
-            std::string temp_payload(temp_read.payload.data());
-            std::cout << "user is active: [" << static_cast<int>(temp_read.flags) << "], id: " << temp_read.id << ", name: "
-             <<temp_payload<< "\n"<< std::endl;
-        }
-        binreader.close();
-    }
-    void binary_read(std::vector<record> &load_records_in_memory) // 666
-   {
-        std::fstream binreader(file_name, std::ios::in | std::ios::binary);
-        if (!binreader)
-        {
-            throw std::runtime_error("unable to open file, error:666,1");
-        }
-   
-        for (uint16_t i{}; i < file_record_buffer; i++)
-        {
-            record temp_read{};
-            binreader.seekg(i * sizeof(record) + sizeof(file_header), std::ios::beg);
-            binreader.read(reinterpret_cast<char *>(&temp_read), sizeof(temp_read));
-            load_records_in_memory.push_back(temp_read);
-        }
-        binreader.close();
-    }
-    
-    void modify_records(uint16_t temp_id,const std::string& new_name) // 777
+    file_record_buffer = file_records();
+    for (uint16_t i{}; i < file_record_buffer; ++i)
     {
         record temp{};
-        if(new_name.empty()||new_name.size()>=temp.payload.size()-1)
-        {
-            throw std::out_of_range("payload is out of range, error::777,0");
-        }
-        std::fstream modify(file_name, std::ios::in | std::ios::out | std::ios::binary);
-        if (!modify)
-        {
-            throw std::runtime_error("unable to open file, error:777,1");
-        }
-        std::streampos offset = find_pos(temp_id);
-        modify.seekg(offset, std::ios::beg);
-        modify.read(reinterpret_cast<char *>(&temp), sizeof(temp));
-        if(!modify)
-        {
-            throw std::runtime_error("unable to read file, error:777,2");
-        }
-        std::memset(temp.payload.data(), 0, sizeof(temp.payload));
-        modify.seekp(offset, std::ios::beg);
-        std::memcpy(temp.payload.data(), new_name.c_str(), new_name.size());
-        temp.payload[new_name.size()]='\0';
-        modify.write(reinterpret_cast<char *>(&temp), sizeof(temp));
-        if(!modify)
-        {
-            throw std::runtime_error("unable to write to file, error:777,3");
-        }
-    }
-    void set_inactive(uint16_t temp_id) // 999
-    {
-        record temp{};
-        allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
-        if (!allocator)
-        {
-            throw std::runtime_error("fatal error:file is corrupted or don't exist, error:999,1");
-        }
-        std::streampos offset = find_pos(temp_id);
+        const std::streampos offset = i * sizeof(record) + sizeof(file_header);
         allocator.seekg(offset, std::ios::beg);
-        allocator.read(reinterpret_cast<char *>(&temp), sizeof(temp));
-        allocator.seekp(offset, std::ios::beg);
-        temp.flags = 0;
-        allocator.write(reinterpret_cast<char *>(&temp), sizeof(temp));
-        id_map.erase(temp_id);
-        allocator.close();
-        //call clear_inactive_records() to clear inactive records from memory and disk
+        allocator.read(reinterpret_cast<char*>(&temp), sizeof(temp));
+        if (temp.flags == 1)
+        {
+            id_map[temp.id] = offset;
+        }
     }
-    void clear_inactive_records() // 12
-    {
-        uint16_t write_index = 0;
-        uint16_t records = file_record_buffer;
-        file_header temp{};
-
-        allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
-        if (!allocator)
-        {
-            throw std::runtime_error("unable to open file,error: 12,0");
-        }
-
-        allocator.seekg(0, std::ios::beg);
-        allocator.read(reinterpret_cast<char *>(&temp), sizeof(temp));
-
-        std::fstream only_active_file("temp.bin", std::ios::binary | std::ios::out|std::ios::trunc);
-         if (!only_active_file)
-        {
-            throw std::runtime_error("can't open file, error:12,1");
-        }
-        only_active_file.write(reinterpret_cast<char *>(&temp), sizeof(temp));
-       
-
-        for (uint16_t i{}; i < records; i++)
-        {
-            record temp_read{};
-            allocator.seekg(i * sizeof(record) + sizeof(file_header), std::ios::beg);
-            allocator.read(reinterpret_cast<char *>(&temp_read), sizeof(temp_read));
-            if (temp_read.flags == 1)
-            {
-                only_active_file.seekp(write_index * sizeof(record) + sizeof(file_header), std::ios::beg);
-                only_active_file.write(reinterpret_cast<char *>(&temp_read), sizeof(temp_read));
-                write_index++;
-            }
-        }
-        allocator.close();
-        only_active_file.close();
-        std::remove(file_name.c_str());
-        rename("temp.bin", file_name.c_str());
-        allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
-        if(!allocator){
-            throw std::runtime_error("unable to open the cleared file, error:12,3");
-        }
-        allocator.seekg(0, std::ios::end);
-        std::streampos size_of_file = allocator.tellg();
-        uint16_t new_record_size = (size_of_file - sizeof(file_header)) / sizeof(record);
-        id_map.clear();
-        for (uint16_t i{}; i < new_record_size; i++)
-        {
-            record temp{};
-            std::streampos offset = i * sizeof(record) + sizeof(file_header);
-            allocator.seekg(offset, std::ios::beg);
-            allocator.read(reinterpret_cast<char *>(&temp), sizeof(temp));
-            if (temp.flags == 1)
-            {
-                id_map[temp.id] = offset;
-            }
-        }
-        file_record_buffer=new_record_size;
-    }
-    
-};
-int main(){
-
-binary_file bin("rayene.bin",{0xa055, 3, 999});
-
-bin.add_records("rayene");
-std::vector<record> records;
-bin.binary_read(records);
-bool name_correct = std::string(records[0].payload.data()) == "rayene";
-bool flag_correct = records[0].flags == 1;
-bool id_in_map = bin.id_map.count(records[0].id) == 1;
-
-std::cout << "add_records name: " << (name_correct ? "PASS" : "FAIL") << "\n";
-std::cout << "add_records flag: " << (flag_correct ? "PASS" : "FAIL") << "\n";
-std::cout << "add_records id_map: " << (id_in_map ? "PASS" : "FAIL") << "\n";
-/*
-output:
-TEST add_records: 2026-03-24 12:31AM
-add_records name: PASS
-add_records flag: PASS
-add_records id_map: PASS
-*/
-/*
-bin.modify_records(999,"omar");
-std::vector<record> modified_record;
-bin.binary_read(modified_record);
-bool name_modified = std::string(modified_record[0].payload.data()) == "omar";
-bool flag_modified = modified_record[0].flags == 1;
-bool id_in_map_modified = bin.id_map.count(modified_record[0].id) == 1;
-
-std::cout << "modify_records name: " << (name_modified ? "PASS" : "FAIL") << "\n";
-std::cout << "modify_records flag: " << (flag_modified ? "PASS" : "FAIL") << "\n";
-std::cout << "modify_records id_map: " << (id_in_map_modified ? "PASS" : "FAIL") << "\n";
-
-TEST mosdify_records: 2026-03-24 12:37AM
-modify_records name: PASS
-modify_records flag: PASS
-modify_records id_map: PASS
-*/
-/*
-bin.set_inactive(999);
-std::vector<record> inactive_records;
-bin.binary_read(inactive_records);
-bool name_inactive = std::string(inactive_records[0].payload.data()) == "omar";
-bool flag_inactive = inactive_records[0].flags == 0;
-bool id_in_map_inactive = bin.id_map.count(inactive_records[0].id) == 0;
-
-std::cout << "inactive_records name: " << (name_inactive ? "PASS" : "FAIL") << "\n";
-std::cout << "inactive_records flag: " << (flag_inactive ? "PASS" : "FAIL") << "\n";
-std::cout << "inactive_records id_map: " << (id_in_map_inactive ? "PASS" : "FAIL") << "\n";
-
-TEST set_inactive: 2026-03-24 12:56AM
-inactive_records name: PASS
-inactive_records flag: PASS
-inactive_records id_map: PASS
-*/
-/*
-bin.clear_inactive_records();
-std::vector<record> cleared_records;
-bin.binary_read(cleared_records);
-std::cout << "binary_read returns records: " << (cleared_records.empty() ? "PASS" : "FAIL") << "\n";
-TEST clear_inactive_records: 2026-03-24 12:56AM
-binary_read returns records: PASS
-*/
-/*
-bin.add_records("Rayene");
-uint16_t first = bin.allocate_id();
-uint16_t second = bin.allocate_id();
-std::cout << "allocate_id increments: " << (second == first + 1 ? "PASS" : "FAIL") << "\n";
-TEST clear_inactive_records: 2026-03-24 1:26AM
-allocate_id increments: PASS
-*/
-/*
-std::cout<<"find_pos results: "<<(bin.find_pos(999)==sizeof(file_header)? "PASS": "FAIL")<<"\n";
-try {
-    bin.find_pos(99999);
-    std::cout << "find_pos invalid id: FAIL\n";
-} catch (std::runtime_error&) {
-    std::cout << "find_pos invalid id: PASS\n";
+    allocator.close();
 }
 
-TEST find_pos:2026-03-24 3:55PM
-find_pos results: PASS
-find_pos invalid id: PASS
-*/
-/*
-uint16_t saved_id;
+binary_file::~binary_file()
 {
-binary_file bin("rayene.bin",{0xa055, 3, 999});
-bin.add_records("rayene");
-std::vector<record> records;
-bin.binary_read(records);
-saved_id=records[0].id;
+    if (allocator.is_open())
+    {
+        allocator.close();
+    }
 }
-binary_file bin2("rayene.bin", {0xa055, 3, 999});
-std::cout << "constructor id_map: " << (bin2.id_map.count(saved_id) == 1 ? "PASS" : "FAIL") << "\n";
 
-TEST constructor:2026-03-24 7:20PM
-constructor id_map: PASS
-*/
+uint16_t binary_file::allocate_id()
+{
+    file_header head{};
+    allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
+    if (!allocator)
+    {
+        throw std::runtime_error("can't open file, error:13,1");
+    }
+
+    allocator.seekg(0, std::ios::beg);
+    allocator.read(reinterpret_cast<char*>(&head), sizeof(head));
+    const uint16_t id = head.next_id;
+    ++head.next_id;
+    allocator.seekp(0, std::ios::beg);
+    allocator.write(reinterpret_cast<const char*>(&head), sizeof(head));
+    allocator.close();
+    return id;
+}
+
+std::streampos binary_file::find_pos(uint16_t temp_id)
+{
+    const auto get_pos = id_map.find(temp_id);
+    if (get_pos == id_map.end())
+    {
+        throw std::runtime_error("invalid input, error:888");
+    }
+    return get_pos->second;
+}
+
+uint16_t binary_file::file_records()
+{
+    std::fstream binreader(file_name, std::ios::in | std::ios::binary);
+    if (!binreader)
+    {
+        throw std::runtime_error(
+            "unable to open file to read and get file size, please try again later, error:333,1");
+    }
+
+    binreader.seekg(0, std::ios::end);
+    const std::streamoff file_size = binreader.tellg();
+    const auto record_count = (file_size - sizeof(file_header)) / sizeof(record);
+    binreader.close();
+    return static_cast<uint16_t>(record_count);
+}
+
+void binary_file::add_records(const std::string& newname)
+{
+    record newinf{};
+    std::fstream user_add(
+        file_name,
+        std::ios::out | std::ios::binary | std::ios::in | std::ios::app);
+    if (!user_add.is_open())
+    {
+        throw std::runtime_error(
+            "unable to open file to add the user, please try again, error:555,1");
+    }
+    if (newname.size() > newinf.payload.size() - 1 || newname.empty())
+    {
+        throw std::out_of_range("payload is out of range,error:555,2");
+    }
+
+    std::memcpy(newinf.payload.data(), newname.c_str(), newname.size());
+    newinf.payload[newname.size()] = '\0';
+    newinf.id = allocate_id();
+    newinf.flags = 1;
+    user_add.seekp(0, std::ios::end);
+    user_add.write(reinterpret_cast<const char*>(&newinf), sizeof(newinf));
+    if (!user_add)
+    {
+        throw std::runtime_error("unable to write to the file, error:555,3");
+    }
+
+    user_add.seekg(0, std::ios::end);
+    const std::streamoff size_of_file = user_add.tellg();
+    const auto number_of_records = (size_of_file - sizeof(file_header)) / sizeof(record);
+    const std::streampos new_offset =
+        (number_of_records - 1) * sizeof(record) + sizeof(file_header);
+    id_map[newinf.id] = new_offset;
+    user_add.close();
+    ++file_record_buffer;
+}
+
+void binary_file::binary_read_console_print()
+{
+    std::fstream binreader(file_name, std::ios::in | std::ios::binary);
+    if (!binreader)
+    {
+        throw std::runtime_error("unable to open file, error:666,1");
+    }
+
+    for (uint16_t i{}; i < file_record_buffer; ++i)
+    {
+        record temp_read{};
+        binreader.seekg(i * sizeof(record) + sizeof(file_header), std::ios::beg);
+        binreader.read(reinterpret_cast<char*>(&temp_read), sizeof(temp_read));
+        const std::string temp_payload(temp_read.payload.data());
+        std::cout << "user is active: [" << static_cast<int>(temp_read.flags)
+                  << "], id: " << temp_read.id << ", name: " << temp_payload << '\n'
+                  << std::endl;
+    }
+}
+
+void binary_file::binary_read(std::vector<record>& load_records_in_memory)
+{
+    std::fstream binreader(file_name, std::ios::in | std::ios::binary);
+    if (!binreader)
+    {
+        throw std::runtime_error("unable to open file, error:666,1");
+    }
+
+    for (uint16_t i{}; i < file_record_buffer; ++i)
+    {
+        record temp_read{};
+        binreader.seekg(i * sizeof(record) + sizeof(file_header), std::ios::beg);
+        binreader.read(reinterpret_cast<char*>(&temp_read), sizeof(temp_read));
+        load_records_in_memory.push_back(temp_read);
+    }
+}
+
+void binary_file::modify_records(uint16_t temp_id, const std::string& new_name)
+{
+    record temp{};
+    if (new_name.empty() || new_name.size() >= temp.payload.size() - 1)
+    {
+        throw std::out_of_range("payload is out of range, error::777,0");
+    }
+
+    std::fstream modify(file_name, std::ios::in | std::ios::out | std::ios::binary);
+    if (!modify)
+    {
+        throw std::runtime_error("unable to open file, error:777,1");
+    }
+
+    const std::streampos offset = find_pos(temp_id);
+    modify.seekg(offset, std::ios::beg);
+    modify.read(reinterpret_cast<char*>(&temp), sizeof(temp));
+    if (!modify)
+    {
+        throw std::runtime_error("unable to read file, error:777,2");
+    }
+
+    std::memset(temp.payload.data(), 0, sizeof(temp.payload));
+    std::memcpy(temp.payload.data(), new_name.c_str(), new_name.size());
+    temp.payload[new_name.size()] = '\0';
+    modify.seekp(offset, std::ios::beg);
+    modify.write(reinterpret_cast<const char*>(&temp), sizeof(temp));
+    if (!modify)
+    {
+        throw std::runtime_error("unable to write to file, error:777,3");
+    }
+}
+
+void binary_file::set_inactive(uint16_t temp_id)
+{
+    record temp{};
+    allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
+    if (!allocator)
+    {
+        throw std::runtime_error(
+            "fatal error:file is corrupted or don't exist, error:999,1");
+    }
+
+    const std::streampos offset = find_pos(temp_id);
+    allocator.seekg(offset, std::ios::beg);
+    allocator.read(reinterpret_cast<char*>(&temp), sizeof(temp));
+    allocator.seekp(offset, std::ios::beg);
+    temp.flags = 0;
+    allocator.write(reinterpret_cast<const char*>(&temp), sizeof(temp));
+    id_map.erase(temp_id);
+    allocator.close();
+}
+
+void binary_file::clear_inactive_records()
+{
+    uint16_t write_index = 0;
+    file_header temp{};
+
+    allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
+    if (!allocator)
+    {
+        throw std::runtime_error("unable to open file,error: 12,0");
+    }
+
+    allocator.seekg(0, std::ios::beg);
+    allocator.read(reinterpret_cast<char*>(&temp), sizeof(temp));
+
+    const std::string temporary_file_name = file_name + ".tmp";
+    std::fstream only_active_file(
+        temporary_file_name,
+        std::ios::binary | std::ios::out | std::ios::trunc);
+    if (!only_active_file)
+    {
+        throw std::runtime_error("can't open file, error:12,1");
+    }
+    only_active_file.write(reinterpret_cast<const char*>(&temp), sizeof(temp));
+
+    for (uint16_t i{}; i < file_record_buffer; ++i)
+    {
+        record temp_read{};
+        allocator.seekg(i * sizeof(record) + sizeof(file_header), std::ios::beg);
+        allocator.read(reinterpret_cast<char*>(&temp_read), sizeof(temp_read));
+        if (temp_read.flags == 1)
+        {
+            only_active_file.seekp(
+                write_index * sizeof(record) + sizeof(file_header),
+                std::ios::beg);
+            only_active_file.write(reinterpret_cast<const char*>(&temp_read), sizeof(temp_read));
+            ++write_index;
+        }
+    }
+
+    allocator.close();
+    only_active_file.close();
+    if (std::remove(file_name.c_str()) != 0 ||
+        std::rename(temporary_file_name.c_str(), file_name.c_str()) != 0)
+    {
+        throw std::runtime_error("unable to replace the cleared file, error:12,2");
+    }
+
+    allocator.open(file_name, std::ios::binary | std::ios::in | std::ios::out);
+    if (!allocator)
+    {
+        throw std::runtime_error("unable to open the cleared file, error:12,3");
+    }
+
+    file_record_buffer = write_index;
+    id_map.clear();
+    for (uint16_t i{}; i < file_record_buffer; ++i)
+    {
+        record active_record{};
+        const std::streampos offset = i * sizeof(record) + sizeof(file_header);
+        allocator.seekg(offset, std::ios::beg);
+        allocator.read(reinterpret_cast<char*>(&active_record), sizeof(active_record));
+        id_map[active_record.id] = offset;
+    }
+    allocator.close();
 }
